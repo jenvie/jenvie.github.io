@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MathQuest: Ungleichungen knacken</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
+        
+        body {
+            font-family: 'Nunito', sans-serif;
+            background-color: #f0fdf4; /* Light green background */
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+        }
+
+        .option-btn {
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: scale(1);
+        }
+
+        .option-btn:hover {
+            transform: scale(1.02);
+        }
+
+        .option-btn.selected {
+            background-color: #3b82f6;
+            color: white;
+            border-color: #2563eb;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+        }
+
+        /* Animations */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        .shake-animation {
+            animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .pop-in {
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes floatUp {
+            0% { transform: translateY(20px); opacity: 0; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+        .float-up {
+            animation: floatUp 0.5s ease-out forwards;
+        }
+        
+        .confetti {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #f00;
+            opacity: 0;
+        }
+    </style>
+</head>
+<body class="min-h-screen text-gray-800 flex flex-col items-center justify-center p-4">
+
+    <!-- Gamification Header -->
+    <div class="w-full max-w-2xl flex justify-between items-center mb-6 pop-in">
+        <div class="flex items-center gap-3">
+            <div class="bg-yellow-400 text-yellow-900 font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
+                <span id="score">0</span> Punkte
+            </div>
+            <div id="streak-container" class="hidden bg-orange-500 text-white font-bold px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+                🔥 <span id="streak">0</span> Combo!
+            </div>
+        </div>
+        <div class="text-gray-500 font-semibold text-sm">Level: <span id="level">Anfänger</span></div>
+    </div>
+
+    <!-- Main Game Card -->
+    <div id="game-card" class="glass-panel w-full max-w-2xl rounded-3xl p-6 md:p-10 shadow-xl relative overflow-hidden pop-in">
+        
+        <!-- Progress Indicator -->
+        <div class="flex justify-center mb-6">
+            <div class="flex items-center gap-2">
+                <div id="step1-dot" class="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold shadow">1</div>
+                <div class="w-10 h-1 bg-gray-200 rounded">
+                    <div id="step-line" class="h-full bg-blue-500 rounded w-0 transition-all duration-500"></div>
+                </div>
+                <div id="step2-dot" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center font-bold transition-colors duration-500">2</div>
+            </div>
+        </div>
+
+        <h2 id="instruction-title" class="text-lg md:text-xl font-bold text-blue-600 mb-2 text-center">Stufe 1: Finde die richtige Gleichung</h2>
+        
+        <!-- The Math Problem -->
+        <div class="bg-white rounded-2xl p-6 shadow-inner border-2 border-blue-100 mb-8 float-up">
+            <p id="task-text" class="text-lg md:text-2xl font-semibold text-center leading-relaxed">
+                Lade Aufgabe...
+            </p>
+        </div>
+
+        <!-- Hint -->
+        <p class="text-sm text-gray-500 text-center mb-4 italic">Wähle alle richtigen Antworten aus (es können 1 oder 2 sein).</p>
+
+        <!-- Options Grid -->
+        <div id="options-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <!-- Buttons generated by JS -->
+        </div>
+
+        <!-- Action Button -->
+        <button id="check-btn" onclick="checkAnswers()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed text-lg">
+            Antworten prüfen
+        </button>
+    </div>
+
+    <!-- Feedback Overlay (Hidden by default) -->
+    <div id="feedback-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden backdrop-blur-sm transition-opacity">
+        <div id="feedback-card" class="bg-white rounded-3xl p-8 max-w-md w-full mx-4 text-center transform scale-90 transition-transform">
+            <div id="feedback-icon" class="text-6xl mb-4"></div>
+            <h2 id="feedback-title" class="text-3xl font-bold mb-2"></h2>
+            <p id="feedback-msg" class="text-gray-600 text-lg mb-8"></p>
+            <button onclick="nextPhase()" id="feedback-btn" class="w-full font-bold py-4 rounded-xl shadow-lg transition-all text-lg text-white">
+                Weiter
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. MATHE & SPRACH GENERATOR ---
+        
+        const MathGen = {
+            getMultiplierWords: function(n) {
+                const words_nom = {
+                    2: "Zweifache", 3: "Dreifache", 4: "Vierfache", 5: "Fünffache", 
+                    6: "Sechsfache", 7: "Siebenfache", 8: "Achtfache", 9: "Neunfache", 10: "Zehnfache"
+                };
+                const words_dat = {
+                    2: "Zweifachen", 3: "Dreifachen", 4: "Vierfachen", 5: "Fünffachen", 
+                    6: "Sechsfachen", 7: "Siebenfachen", 8: "Achtfachen", 9: "Neunfachen", 10: "Zehnfachen"
+                };
+                
+                if (n < 0) return { nom: `Produkt aus (${n}) und`, dat: `Produkt aus (${n}) und` };
+                
+                return {
+                    nom: words_nom[n] || `${n}-fache`,
+                    dat: words_dat[n] || `${n}-fachen`
+                };
+            },
+
+            generateTermText: function(a, b, isLeftSide) {
+                const words = this.getMultiplierWords(a);
+                let templates = [];
+                
+                // ax - b
+                if (a > 0 && b < 0) {
+                    let val_b = Math.abs(b);
+                    templates.push(`Subtrahiert man ${val_b} vom ${words.dat} einer Zahl`);
+                    templates.push(`Das ${words.nom} einer Zahl verringert um ${val_b}`);
+                }
+                // b - ax
+                else if (a < 0 && b > 0) {
+                    let val_a = this.getMultiplierWords(Math.abs(a));
+                    templates.push(`Subtrahiert man von ${b} das ${val_a.nom} einer Zahl`);
+                    if (!isLeftSide) {
+                        templates.push(`die Differenz aus ${b} und dem ${val_a.dat} der Zahl`);
+                    }
+                }
+                // ax - b (both negative)
+                else if (a < 0 && b < 0) {
+                    let val_b = Math.abs(b);
+                    templates.push(`Das Produkt aus (${a}) und der Zahl vermindert um ${val_b}`);
+                }
+                // b + ax
+                else {
+                    templates.push(`Die Summe aus ${b} und dem ${words.dat} einer Zahl`);
+                }
+                
+                let chosen = templates[Math.floor(Math.random() * templates.length)];
+                let needsFiller = isLeftSide && chosen.startsWith("Subtrahiert");
+                
+                // Lowercase if it's right side and doesn't start with noun
+                if (!isLeftSide && !chosen.startsWith("die") && !chosen.startsWith("Das") && !chosen.startsWith("Die")) {
+                   chosen = chosen.charAt(0).toLowerCase() + chosen.slice(1);
+                }
+
+                return { text: chosen, needsFiller: needsFiller };
+            },
+
+            generateTask: function() {
+                // Ensure whole number limit
+                let x_limit = Math.floor(Math.random() * 21) - 10; // -10 to 10
+                
+                // Random a, c (not equal, no 0, 1, -1)
+                let validCoeffs = [-9,-8,-7,-6,-5,-4,-3,-2,2,3,4,5,6,7,8,9];
+                let a = validCoeffs[Math.floor(Math.random() * validCoeffs.length)];
+                let c = validCoeffs[Math.floor(Math.random() * validCoeffs.length)];
+                while(c === a) {
+                    c = validCoeffs[Math.floor(Math.random() * validCoeffs.length)];
+                }
+                
+                let b = Math.floor(Math.random() * 41) - 20; // -20 to 20
+                let d = (a - c) * x_limit + b;
+                
+                let operator = Math.random() < 0.5 ? "<" : ">";
+                
+                let solution_operator;
+                if ((a - c) > 0) {
+                    solution_operator = operator === "<" ? "<" : ">";
+                } else {
+                    solution_operator = operator === "<" ? ">" : "<";
+                }
+
+                let left = this.generateTermText(a, b, true);
+                let right = this.generateTermText(c, d, false);
+                
+                let opText = operator === "<" ? "kleiner als" : "größer als";
+                let text = left.needsFiller ? 
+                    `${left.text}, so ist diese Differenz ${opText} ${right.text}.` : 
+                    `${left.text} ist ${opText} ${right.text}.`;
+
+                return {
+                    text: text,
+                    a: a, b: b, c: c, d: d, operator: operator,
+                    solution_operator: solution_operator,
+                    x_limit: x_limit
+                };
+            },
+
+            formatEq: function(a, b, op, c, d) {
+                let left = `${a}x ${b >= 0 ? '+' : '-'} ${Math.abs(b)}`;
+                let right = `${c}x ${d >= 0 ? '+' : '-'} ${Math.abs(d)}`;
+                return `${left} ${op} ${right}`;
+            },
+            
+            formatEqCommutative: function(a, b, op, c, d) {
+                let left = `${b} ${a >= 0 ? '+' : ''}${a}x`; // e.g. 5 - 3x or 5 + 3x
+                let right = `${d} ${c >= 0 ? '+' : ''}${c}x`;
+                return `${left} ${op} ${right}`;
+            },
+
+            generateEqOptions: function(task) {
+                let options = [];
+                // Correct 1: Standard
+                options.push({ text: this.formatEq(task.a, task.b, task.operator, task.c, task.d), isCorrect: true });
+                
+                // Correct 2: Commutative (50% chance to include)
+                if (Math.random() > 0.5) {
+                    options.push({ text: this.formatEqCommutative(task.a, task.b, task.operator, task.c, task.d), isCorrect: true });
+                }
+
+                // Distractors
+                let wrongOp = task.operator === "<" ? ">" : "<";
+                options.push({ text: this.formatEq(task.a, task.b, wrongOp, task.c, task.d), isCorrect: false });
+                options.push({ text: this.formatEq(task.c, task.d, task.operator, task.a, task.b), isCorrect: false }); // Flipped sides, wrong math
+                options.push({ text: this.formatEq(task.a, task.b + 5, task.operator, task.c, task.d - 2), isCorrect: false }); // Slightly off numbers
+                
+                // Fill up to 5 options if needed
+                while(options.length < 5) {
+                    let randomB = task.b + (Math.floor(Math.random() * 5) + 1) * (Math.random() < 0.5 ? 1 : -1);
+                    options.push({ text: this.formatEq(task.a, randomB, task.operator, task.c, task.d), isCorrect: false });
+                }
+
+                // Shuffle
+                return options.sort(() => Math.random() - 0.5).slice(0, 5);
+            },
+
+            generateSolOptions: function(task) {
+                let options = [];
+                // Correct 1: Standard
+                options.push({ text: `x ${task.solution_operator} ${task.x_limit}`, isCorrect: true });
+                
+                // Correct 2: Flipped reading (e.g., 5 > x instead of x < 5)
+                if (Math.random() > 0.5) {
+                    let flippedOp = task.solution_operator === "<" ? ">" : "<";
+                    options.push({ text: `${task.x_limit} ${flippedOp} x`, isCorrect: true });
+                }
+
+                // Distractors
+                let wrongOp = task.solution_operator === "<" ? ">" : "<";
+                options.push({ text: `x ${wrongOp} ${task.x_limit}`, isCorrect: false });
+                options.push({ text: `x = ${task.x_limit}`, isCorrect: false });
+                options.push({ text: `x ${task.solution_operator} ${task.x_limit * -1}`, isCorrect: false });
+                
+                while(options.length < 5) {
+                    let offLimit = task.x_limit + (Math.floor(Math.random() * 3) + 1);
+                    options.push({ text: `x ${task.solution_operator} ${offLimit}`, isCorrect: false });
+                }
+
+                return options.sort(() => Math.random() - 0.5).slice(0, 5);
+            }
+        };
+
+        // --- 2. GAME LOGIC & UI ---
+        
+        let gameState = {
+            score: 0,
+            streak: 0,
+            phase: 1, // 1 = Eq, 2 = Sol
+            currentTask: null,
+            currentOptions: [],
+            selectedIndices: []
+        };
+
+        const motivationMessages = [
+            "Das war knifflig. Aus Fehlern lernt man!",
+            "Fast! Beim nächsten Mal klappt es.",
+            "Lass dich nicht unterkriegen. Weiter geht's!",
+            "Jeder Fehler macht dein Gehirn stärker.",
+            "Ups! Ein kleiner Denkfehler. Neuer Versuch!"
+        ];
+
+        function updateHUD() {
+            document.getElementById('score').innerText = gameState.score;
+            document.getElementById('streak').innerText = gameState.streak;
+            
+            const streakCont = document.getElementById('streak-container');
+            if (gameState.streak >= 2) {
+                streakCont.classList.remove('hidden');
+                streakCont.classList.add('pop-in');
+            } else {
+                streakCont.classList.add('hidden');
+            }
+
+            // Update Levels
+            let level = "Anfänger";
+            if(gameState.score >= 50) level = "Fortgeschritten";
+            if(gameState.score >= 150) level = "Profi";
+            if(gameState.score >= 300) level = "Mathe-Ninja";
+            document.getElementById('level').innerText = level;
+        }
+
+        function toggleSelection(index) {
+            const btn = document.getElementById(`opt-${index}`);
+            let pos = gameState.selectedIndices.indexOf(index);
+            
+            if (pos === -1) {
+                gameState.selectedIndices.push(index);
+                btn.classList.add('selected');
+            } else {
+                gameState.selectedIndices.splice(pos, 1);
+                btn.classList.remove('selected');
+            }
+            
+            // Enable/disable check button
+            document.getElementById('check-btn').disabled = gameState.selectedIndices.length === 0;
+        }
+
+        function renderOptions(options) {
+            const container = document.getElementById('options-container');
+            container.innerHTML = '';
+            gameState.selectedIndices = [];
+            document.getElementById('check-btn').disabled = true;
+
+            options.forEach((opt, index) => {
+                const btn = document.createElement('button');
+                btn.id = `opt-${index}`;
+                btn.className = `option-btn w-full bg-white border-2 border-gray-200 text-gray-700 font-bold py-4 px-6 rounded-xl text-lg flex items-center justify-between float-up`;
+                btn.style.animationDelay = `${index * 0.1}s`;
+                
+                // Use a generic placeholder for the checkbox to keep it clean
+                btn.innerHTML = `
+                    <span class="tracking-widest font-mono">${opt.text}</span>
+                    <div class="w-6 h-6 rounded border-2 border-gray-300 flex items-center justify-center check-indicator"></div>
+                `;
+                
+                btn.onclick = () => toggleSelection(index);
+                container.appendChild(btn);
+            });
+        }
+
+        function startNewTask() {
+            gameState.phase = 1;
+            gameState.currentTask = MathGen.generateTask();
+            
+            // Update UI
+            document.getElementById('task-text').innerText = gameState.currentTask.text;
+            document.getElementById('instruction-title').innerText = "Stufe 1: Finde die richtige(n) Gleichung(en)";
+            document.getElementById('instruction-title').classList.replace('text-green-600', 'text-blue-600');
+            
+            // Progress Bar Reset
+            document.getElementById('step-line').style.width = "0%";
+            document.getElementById('step2-dot').className = "w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center font-bold transition-colors duration-500";
+            
+            gameState.currentOptions = MathGen.generateEqOptions(gameState.currentTask);
+            renderOptions(gameState.currentOptions);
+        }
+
+        function showFeedback(isSuccess, title, msg, btnText) {
+            const overlay = document.getElementById('feedback-overlay');
+            const card = document.getElementById('feedback-card');
+            const icon = document.getElementById('feedback-icon');
+            const btn = document.getElementById('feedback-btn');
+
+            document.getElementById('feedback-title').innerText = title;
+            document.getElementById('feedback-msg').innerText = msg;
+            btn.innerText = btnText;
+
+            if (isSuccess) {
+                icon.innerText = "🌟";
+                document.getElementById('feedback-title').className = "text-3xl font-bold mb-2 text-green-600";
+                btn.className = "w-full font-bold py-4 rounded-xl shadow-lg transition-all text-lg text-white bg-green-500 hover:bg-green-600";
+            } else {
+                icon.innerText = "😅";
+                document.getElementById('feedback-title').className = "text-3xl font-bold mb-2 text-red-500";
+                btn.className = "w-full font-bold py-4 rounded-xl shadow-lg transition-all text-lg text-white bg-red-500 hover:bg-red-600";
+            }
+
+            overlay.classList.remove('hidden');
+            setTimeout(() => {
+                card.classList.remove('scale-90');
+                card.classList.add('scale-100');
+            }, 10);
+        }
+
+        function nextPhase() {
+            // Hide feedback
+            const overlay = document.getElementById('feedback-overlay');
+            const card = document.getElementById('feedback-card');
+            card.classList.remove('scale-100');
+            card.classList.add('scale-90');
+            setTimeout(() => overlay.classList.add('hidden'), 200);
+
+            if (gameState.phase === 1.5) {
+                // Moving to phase 2
+                gameState.phase = 2;
+                document.getElementById('instruction-title').innerText = "Stufe 2: Finde die richtige(n) Lösung(en)";
+                document.getElementById('instruction-title').classList.replace('text-blue-600', 'text-green-600');
+                
+                // Progress Bar Update
+                document.getElementById('step-line').style.width = "100%";
+                document.getElementById('step2-dot').className = "w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold transition-colors duration-500";
+                
+                gameState.currentOptions = MathGen.generateSolOptions(gameState.currentTask);
+                renderOptions(gameState.currentOptions);
+            } else {
+                // Was a failure or full success, start new task
+                startNewTask();
+            }
+        }
+
+        function checkAnswers() {
+            // Check if selected matches exact correct answers
+            let correctIndices = [];
+            gameState.currentOptions.forEach((opt, idx) => {
+                if (opt.isCorrect) correctIndices.push(idx);
+            });
+
+            // Sort both arrays to compare
+            let sortedSelected = [...gameState.selectedIndices].sort();
+            let isPerfectMatch = (sortedSelected.length === correctIndices.length) && 
+                                 sortedSelected.every((val, index) => val === correctIndices[index]);
+
+            const gameCard = document.getElementById('game-card');
+
+            if (!isPerfectMatch) {
+                // --- FAILURE ---
+                gameCard.classList.add('shake-animation');
+                setTimeout(() => gameCard.classList.remove('shake-animation'), 500);
+                
+                gameState.streak = 0;
+                updateHUD();
+                
+                let randomMsg = motivationMessages[Math.floor(Math.random() * motivationMessages.length)];
+                
+                // Identify what went wrong for specific feedback (optional, but good UX)
+                let missed = correctIndices.length - sortedSelected.filter(x => correctIndices.includes(x)).length;
+                let wrongSelected = sortedSelected.filter(x => !correctIndices.includes(x)).length;
+                
+                let detailedMsg = randomMsg;
+                if (wrongSelected > 0) detailedMsg = "Du hast eine falsche Antwort markiert. " + randomMsg;
+                else if (missed > 0) detailedMsg = `Du hast nicht alle richtigen Antworten gefunden (es fehlte ${missed}). ` + randomMsg;
+
+                gameState.phase = 0; // Trigger reset on next
+                showFeedback(false, "Schade!", detailedMsg, "Neue Aufgabe");
+            } else {
+                // --- SUCCESS ---
+                if (gameState.phase === 1) {
+                    gameState.phase = 1.5; // Intermediate state
+                    showFeedback(true, "Klasse!", "Die Gleichung(en) stimmt. Jetzt lösen wir sie auf!", "Zur Lösung");
+                } else if (gameState.phase === 2) {
+                    // Full Win!
+                    gameState.score += 10;
+                    gameState.streak += 1;
+                    
+                    // Extra points for streaks
+                    if (gameState.streak >= 3) gameState.score += 5;
+                    
+                    updateHUD();
+                    gameState.phase = 0; // Reset for next
+                    showFeedback(true, "Perfekt gelöst!", `Du erhältst 10 Punkte!${gameState.streak >= 3 ? ' +5 Combo-Bonus!' : ''}`, "Nächste Aufgabe");
+                }
+            }
+        }
+
+        // Init
+        document.addEventListener('DOMContentLoaded', () => {
+            updateHUD();
+            startNewTask();
+        });
+    </script>
+</body>
+</html>
+
