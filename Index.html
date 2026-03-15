@@ -453,7 +453,7 @@
             actionMode: 'check' // 'check' | 'continue'
         };
 
-        const STORAGE_KEY = 'mathquest_v110';
+        const STORAGE_KEY = 'mathquest_v1_1_0';
 
         function saveState() {
             try {
@@ -462,7 +462,7 @@
                     streak: gameState.streak,
                     recentAnswers: gameState.recentAnswers.slice(-10)
                 }));
-            } catch(e) { /* storage unavailable — ignore */ }
+            } catch(e) { console.warn('MathQuest: could not save state to localStorage:', e); }
         }
 
         function loadState() {
@@ -474,7 +474,7 @@
                     gameState.streak = data.streak || 0;
                     gameState.recentAnswers = Array.isArray(data.recentAnswers) ? data.recentAnswers : [];
                 }
-            } catch(e) { /* corrupt data — ignore */ }
+            } catch(e) { console.warn('MathQuest: could not restore saved state:', e); }
         }
 
         const motivationMessages = [
@@ -564,7 +564,7 @@
 
         function _updateHintText(numCorrect, total) {
             const hintEl = document.getElementById('hint-text');
-            if (total === 2 || numCorrect === 1) {
+            if (numCorrect === 1) {
                 hintEl.innerText = 'Wähle die richtige Antwort aus (1 richtige).';
             } else {
                 hintEl.innerText = 'Wähle alle richtigen Antworten aus (es können 1 oder 2 sein).';
@@ -670,9 +670,9 @@
             });
 
             let sortedSelected = [...gameState.selectedIndices].sort((a, b) => a - b);
-            let sortedCorrect  = [...correctIndices].sort((a, b) => a - b);
-            let isPerfectMatch = (sortedSelected.length === sortedCorrect.length) && 
-                                  sortedSelected.every((val, i) => val === sortedCorrect[i]);
+            // correctIndices is already in ascending order (built via forEach over array indices)
+            let isPerfectMatch = (sortedSelected.length === correctIndices.length) && 
+                                  sortedSelected.every((val, i) => val === correctIndices[i]);
 
             const gameCard = document.getElementById('game-card');
 
@@ -762,6 +762,9 @@
         function launchConfetti() {
             const colors = ['#f59e0b', '#ef4444', '#3b82f6', '#22c55e', '#a855f7', '#ec4899', '#06b6d4', '#fde68a'];
             const count = 90;
+            const maxDuration = 4700; // slightly beyond the longest possible fall (2.5+2=4.5s → +200ms buffer)
+            const pieces = [];
+
             for (let i = 0; i < count; i++) {
                 setTimeout(() => {
                     const el = document.createElement('div');
@@ -772,12 +775,17 @@
                     el.style.width = size;
                     el.style.height = size;
                     el.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
-                    const duration = (Math.random() * 2.5 + 2) + 's';
+                    const duration = (Math.random() * 2.5 + 2).toFixed(2) + 's';
                     el.style.animation = `confettiFall ${duration} ease-in forwards`;
                     document.body.appendChild(el);
-                    setTimeout(() => el.remove(), parseFloat(duration) * 1000 + 100);
+                    pieces.push(el);
                 }, i * 25);
             }
+
+            // Batch-remove all pieces after the longest possible animation completes
+            setTimeout(() => {
+                pieces.forEach(el => el.remove());
+            }, count * 25 + maxDuration);
         }
 
         // Init
