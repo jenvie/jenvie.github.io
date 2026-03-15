@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MathQuest: Ungleichungen knacken</title>
+    <title>MathQuest V1.1.0: Ungleichungen knacken</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
@@ -27,7 +27,7 @@
             transform: scale(1);
         }
 
-        .option-btn:hover {
+        .option-btn:hover:not(:disabled) {
             transform: scale(1.02);
         }
 
@@ -36,6 +36,20 @@
             color: white;
             border-color: #2563eb;
             box-shadow: 0 0 15px rgba(59, 130, 246, 0.4);
+        }
+
+        .option-btn.correct-answer {
+            background-color: #22c55e;
+            color: white;
+            border-color: #16a34a;
+            box-shadow: 0 0 15px rgba(34, 197, 94, 0.4);
+        }
+
+        .option-btn.wrong-answer {
+            background-color: #ef4444;
+            color: white;
+            border-color: #dc2626;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
         }
 
         /* Animations */
@@ -63,13 +77,68 @@
         .float-up {
             animation: floatUp 0.5s ease-out forwards;
         }
-        
+
+        @keyframes bounceIn {
+            0%   { transform: scale(0.3); opacity: 0; }
+            50%  { transform: scale(1.15); opacity: 1; }
+            70%  { transform: scale(0.95); }
+            100% { transform: scale(1); }
+        }
+        .bounce-in {
+            animation: bounceIn 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 20px rgba(234, 179, 8, 0.5); }
+            50%       { box-shadow: 0 0 50px rgba(234, 179, 8, 0.95), 0 0 100px rgba(234, 179, 8, 0.4); }
+        }
+        .pulse-glow {
+            animation: pulseGlow 1.6s ease-in-out infinite;
+        }
+
+        @keyframes shimmer {
+            0%   { background-position: -200% center; }
+            100% { background-position:  200% center; }
+        }
+        .shimmer-text {
+            background: linear-gradient(90deg, #fbbf24, #f59e0b, #fde68a, #f59e0b, #fbbf24);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: shimmer 2s linear infinite;
+        }
+
+        @keyframes starBurst {
+            0%   { transform: scale(0) rotate(-30deg); opacity: 0; }
+            60%  { transform: scale(1.3) rotate(10deg); opacity: 1; }
+            80%  { transform: scale(0.9) rotate(-5deg); }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        .star-burst {
+            animation: starBurst 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        /* Confetti pieces */
         .confetti {
-            position: absolute;
+            position: fixed;
+            top: -20px;
             width: 10px;
             height: 10px;
-            background-color: #f00;
+            border-radius: 2px;
             opacity: 0;
+            z-index: 200;
+            pointer-events: none;
+        }
+
+        @keyframes confettiFall {
+            0%   { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(105vh) rotate(720deg); opacity: 0; }
+        }
+
+        /* Level-up overlay background */
+        #levelup-overlay {
+            background: linear-gradient(135deg, rgba(0,0,0,0.88) 0%, rgba(15,15,50,0.96) 100%);
         }
     </style>
 </head>
@@ -86,7 +155,7 @@
                 🔥 <span id="streak">0</span> Combo!
             </div>
         </div>
-        <div class="text-gray-500 font-semibold text-sm">Level: <span id="level">Anfänger</span></div>
+        <div class="text-gray-500 font-semibold text-sm">Level: <span id="level">Anfänger 🌱</span></div>
     </div>
 
     <!-- Main Game Card -->
@@ -113,7 +182,7 @@
         </div>
 
         <!-- Hint -->
-        <p class="text-sm text-gray-500 text-center mb-4 italic">Wähle alle richtigen Antworten aus (es können 1 oder 2 sein).</p>
+        <p id="hint-text" class="text-sm text-gray-500 text-center mb-4 italic">Wähle alle richtigen Antworten aus (es können 1 oder 2 sein).</p>
 
         <!-- Options Grid -->
         <div id="options-container" class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
@@ -121,7 +190,7 @@
         </div>
 
         <!-- Action Button -->
-        <button id="check-btn" onclick="checkAnswers()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed text-lg">
+        <button id="check-btn" onclick="handleActionBtn()" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed text-lg">
             Antworten prüfen
         </button>
     </div>
@@ -138,8 +207,68 @@
         </div>
     </div>
 
+    <!-- Level-Up Ceremony Overlay -->
+    <div id="levelup-overlay" class="fixed inset-0 flex items-center justify-center z-[100] hidden">
+        <div id="levelup-card" class="relative bg-gradient-to-br from-yellow-900 via-yellow-800 to-amber-900 rounded-3xl p-10 max-w-md w-full mx-4 text-center transform scale-50 transition-all duration-500 overflow-hidden">
+            <!-- Decorative rings -->
+            <div class="absolute inset-0 rounded-3xl border-4 border-yellow-400 opacity-30 pointer-events-none"></div>
+            <div class="absolute inset-3 rounded-3xl border-2 border-yellow-300 opacity-20 pointer-events-none"></div>
+            <div id="levelup-icon" class="text-8xl mb-4 star-burst inline-block">🏅</div>
+            <p class="text-yellow-300 font-bold text-sm mb-1 uppercase tracking-widest">🎉 Level Up! 🎉</p>
+            <h2 id="levelup-name" class="text-4xl font-black mb-4 shimmer-text">Entdecker</h2>
+            <p id="levelup-msg" class="text-yellow-100 text-lg mb-8 leading-relaxed"></p>
+            <button onclick="closeLevelUp()" class="w-full font-black py-4 rounded-xl text-lg text-yellow-900 bg-yellow-400 hover:bg-yellow-300 pulse-glow transition-all transform hover:scale-[1.02]">
+                🚀 Weiter geht's!
+            </button>
+        </div>
+    </div>
+
     <script>
-        // --- 1. MATHE & SPRACH GENERATOR ---
+        // --- 1. LEVELS & DIFFICULTY CONFIG ---
+
+        const LEVELS = [
+            { pts:   0, name: "Anfänger",        icon: "🌱", msg: "Willkommen bei MathQuest! Du schaffst das!" },
+            { pts:  50, name: "Entdecker",        icon: "⭐", msg: "Fantastisch! Du hast 50 Punkte geknackt – weiter so!" },
+            { pts: 100, name: "Rechenkünstler",   icon: "🏅", msg: "Unglaublich! 100 Punkte – du bist ein echter Rechenkünstler!" },
+            { pts: 150, name: "Profi",            icon: "🥈", msg: "Wow, 150 Punkte! Du denkst und rechnest wie ein Profi!" },
+            { pts: 200, name: "Experte",          icon: "🥇", msg: "Beeindruckend! 200 Punkte – du bist ein wahrer Mathe-Experte!" },
+            { pts: 250, name: "Meister",          icon: "🏆", msg: "Hammer! 250 Punkte – du hast den begehrten Meister-Rang erreicht!" },
+            { pts: 300, name: "Mathe-Ninja",      icon: "🥷", msg: "Legendär! 300 Punkte – du bewegst dich wie ein Schatten durch die Zahlen!" },
+            { pts: 350, name: "Legende",          icon: "👑", msg: "Majestätisch! 350 Punkte – du bist eine echte Mathe-Legende!" },
+            { pts: 400, name: "Mathe-Gott",       icon: "✨", msg: "Göttlich! 400 Punkte – du beherrschst die Mathematik vollständig!" },
+        ];
+
+        function getCurrentLevel(score) {
+            let level = LEVELS[0];
+            for (const l of LEVELS) {
+                if (score >= l.pts) level = l;
+            }
+            return level;
+        }
+
+        // Difficulty tiers (thresholds offset from level thresholds):
+        //   Tier 0 (0–29 pts):  2 options total, 1 correct
+        //   Tier 1 (30–69 pts): 4 options total, 1–2 correct (random)
+        //   Tier 2 (70+ pts):   5 options total, 1–2 correct (random)
+        // Anti-frustration: if ≥3 wrong in last 5 answers, drop one tier temporarily.
+        function getDifficultyTier(score, recentAnswers) {
+            let tier = score >= 70 ? 2 : score >= 30 ? 1 : 0;
+            if (recentAnswers.length >= 5) {
+                const last5 = recentAnswers.slice(-5);
+                const wrongCount = last5.filter(x => !x).length;
+                if (wrongCount >= 3 && tier > 0) tier--;
+            }
+            return tier;
+        }
+
+        function getOptionsConfig(tier) {
+            if (tier === 0) return { total: 2, numCorrect: 1 };
+            const numCorrect = Math.random() < 0.5 ? 1 : 2;
+            const total = tier === 1 ? 4 : 5;
+            return { total, numCorrect };
+        }
+
+        // --- 2. MATHE & SPRACH GENERATOR ---
         
         const MathGen = {
             getMultiplierWords: function(n) {
@@ -251,48 +380,44 @@
                 return `${left} ${op} ${right}`;
             },
 
-            generateEqOptions: function(task) {
+            generateEqOptions: function(task, numCorrect, numWrong) {
                 let correctOptions = [];
                 let wrongOptions = [];
 
-                // Correct 1: Standard
+                // Always include standard form as correct
                 correctOptions.push({ text: this.formatEq(task.a, task.b, task.operator, task.c, task.d), isCorrect: true });
 
-                // Correct 2: Commutative (50% chance)
-                if (Math.random() > 0.5) {
+                // Add commutative variant if a second correct answer is needed
+                if (numCorrect >= 2) {
                     correctOptions.push({ text: this.formatEqCommutative(task.a, task.b, task.operator, task.c, task.d), isCorrect: true });
                 }
 
                 // Distractors
                 let wrongOp = task.operator === "<" ? ">" : "<";
                 wrongOptions.push({ text: this.formatEq(task.a, task.b, wrongOp, task.c, task.d), isCorrect: false });
-                wrongOptions.push({ text: this.formatEq(task.c, task.d, task.operator, task.a, task.b), isCorrect: false }); // Flipped sides, wrong math
-                wrongOptions.push({ text: this.formatEq(task.a, task.b + 5, task.operator, task.c, task.d - 2), isCorrect: false }); // Slightly off numbers
+                wrongOptions.push({ text: this.formatEq(task.c, task.d, task.operator, task.a, task.b), isCorrect: false });
+                wrongOptions.push({ text: this.formatEq(task.a, task.b + 5, task.operator, task.c, task.d - 2), isCorrect: false });
 
-                // Fill wrong options until we have enough for a total of 5
-                while (correctOptions.length + wrongOptions.length < 5) {
+                while (wrongOptions.length < numWrong) {
                     let randomB = task.b + (Math.floor(Math.random() * 5) + 1) * (Math.random() < 0.5 ? 1 : -1);
                     wrongOptions.push({ text: this.formatEq(task.a, randomB, task.operator, task.c, task.d), isCorrect: false });
                 }
 
-                // Trim ONLY wrong options to fit exactly 5 total
-                const wrongCount = 5 - correctOptions.length;
-                wrongOptions = wrongOptions.sort(() => Math.random() - 0.5).slice(0, wrongCount);
+                wrongOptions = wrongOptions.sort(() => Math.random() - 0.5).slice(0, numWrong);
 
-                // Combine and shuffle
                 const allOptions = [...correctOptions, ...wrongOptions];
                 return allOptions.sort(() => Math.random() - 0.5);
             },
 
-            generateSolOptions: function(task) {
+            generateSolOptions: function(task, numCorrect, numWrong) {
                 let correctOptions = [];
                 let wrongOptions = [];
 
-                // Correct 1: Standard
+                // Standard correct
                 correctOptions.push({ text: `x ${task.solution_operator} ${task.x_limit}`, isCorrect: true });
 
-                // Correct 2: Flipped reading (e.g., 5 > x instead of x < 5)
-                if (Math.random() > 0.5) {
+                // Flipped reading (e.g. 5 > x) if a second correct answer is needed
+                if (numCorrect >= 2) {
                     let flippedOp = task.solution_operator === "<" ? ">" : "<";
                     correctOptions.push({ text: `${task.x_limit} ${flippedOp} x`, isCorrect: true });
                 }
@@ -303,31 +428,54 @@
                 wrongOptions.push({ text: `x = ${task.x_limit}`, isCorrect: false });
                 wrongOptions.push({ text: `x ${task.solution_operator} ${task.x_limit * -1}`, isCorrect: false });
 
-                while (correctOptions.length + wrongOptions.length < 5) {
+                while (wrongOptions.length < numWrong) {
                     let offLimit = task.x_limit + (Math.floor(Math.random() * 3) + 1);
                     wrongOptions.push({ text: `x ${task.solution_operator} ${offLimit}`, isCorrect: false });
                 }
 
-                // Trim ONLY wrong options to fit exactly 5 total
-                const wrongCount = 5 - correctOptions.length;
-                wrongOptions = wrongOptions.sort(() => Math.random() - 0.5).slice(0, wrongCount);
+                wrongOptions = wrongOptions.sort(() => Math.random() - 0.5).slice(0, numWrong);
 
-                // Combine and shuffle
                 const allOptions = [...correctOptions, ...wrongOptions];
                 return allOptions.sort(() => Math.random() - 0.5);
             }
         };
 
-        // --- 2. GAME LOGIC & UI ---
+        // --- 3. GAME LOGIC & UI ---
         
         let gameState = {
             score: 0,
             streak: 0,
-            phase: 1, // 1 = Eq, 2 = Sol
+            phase: 1,           // 1 = Eq, 1.5 = Eq solved, 2 = Sol, 0 = reset
             currentTask: null,
             currentOptions: [],
-            selectedIndices: []
+            selectedIndices: [],
+            recentAnswers: [],  // true = correct, false = wrong (last 10)
+            actionMode: 'check' // 'check' | 'continue'
         };
+
+        const STORAGE_KEY = 'mathquest_v1_1_0';
+
+        function saveState() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                    score: gameState.score,
+                    streak: gameState.streak,
+                    recentAnswers: gameState.recentAnswers.slice(-10)
+                }));
+            } catch(e) { console.warn('MathQuest: could not save state to localStorage:', e); }
+        }
+
+        function loadState() {
+            try {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                if (saved) {
+                    const data = JSON.parse(saved);
+                    gameState.score = data.score || 0;
+                    gameState.streak = data.streak || 0;
+                    gameState.recentAnswers = Array.isArray(data.recentAnswers) ? data.recentAnswers : [];
+                }
+            } catch(e) { console.warn('MathQuest: could not restore saved state:', e); }
+        }
 
         const motivationMessages = [
             "Das war knifflig. Aus Fehlern lernt man!",
@@ -349,17 +497,14 @@
                 streakCont.classList.add('hidden');
             }
 
-            // Update Levels
-            let level = "Anfänger";
-            if(gameState.score >= 50) level = "Fortgeschritten";
-            if(gameState.score >= 150) level = "Profi";
-            if(gameState.score >= 300) level = "Mathe-Ninja";
-            document.getElementById('level').innerText = level;
+            const currentLevel = getCurrentLevel(gameState.score);
+            document.getElementById('level').innerText = `${currentLevel.name} ${currentLevel.icon}`;
         }
 
         function toggleSelection(index) {
+            if (gameState.actionMode !== 'check') return;
             const btn = document.getElementById(`opt-${index}`);
-            let pos = gameState.selectedIndices.indexOf(index);
+            const pos = gameState.selectedIndices.indexOf(index);
             
             if (pos === -1) {
                 gameState.selectedIndices.push(index);
@@ -369,7 +514,6 @@
                 btn.classList.remove('selected');
             }
             
-            // Enable/disable check button
             document.getElementById('check-btn').disabled = gameState.selectedIndices.length === 0;
         }
 
@@ -385,7 +529,6 @@
                 btn.className = `option-btn w-full bg-white border-2 border-gray-200 text-gray-700 font-bold py-4 px-6 rounded-xl text-lg flex items-center justify-between float-up`;
                 btn.style.animationDelay = `${index * 0.1}s`;
                 
-                // Use a generic placeholder for the checkbox to keep it clean
                 btn.innerHTML = `
                     <span class="tracking-widest font-mono">${opt.text}</span>
                     <div class="w-6 h-6 rounded border-2 border-gray-300 flex items-center justify-center check-indicator"></div>
@@ -396,20 +539,62 @@
             });
         }
 
+        // Highlight correct/wrong answers in-place after a failed submission.
+        function highlightOptions(correctIndices, selectedIndices) {
+            document.querySelectorAll('.option-btn').forEach((btn, index) => {
+                btn.disabled = true;
+                btn.onclick = null;
+                btn.classList.remove('selected');
+                const isCorrect = correctIndices.includes(index);
+                const isWronglySelected = selectedIndices.includes(index) && !isCorrect;
+                if (isCorrect) {
+                    btn.classList.add('correct-answer');
+                    btn.querySelector('.check-indicator').innerHTML = '✓';
+                } else if (isWronglySelected) {
+                    btn.classList.add('wrong-answer');
+                    btn.querySelector('.check-indicator').innerHTML = '✗';
+                }
+            });
+        }
+
+        function _getOptionsConfigForCurrentTask() {
+            const tier = getDifficultyTier(gameState.score, gameState.recentAnswers);
+            return getOptionsConfig(tier);
+        }
+
+        function _updateHintText(numCorrect, total) {
+            const hintEl = document.getElementById('hint-text');
+            if (numCorrect === 1) {
+                hintEl.innerText = 'Wähle die richtige Antwort aus (1 richtige).';
+            } else {
+                hintEl.innerText = 'Wähle alle richtigen Antworten aus (es können 1 oder 2 sein).';
+            }
+        }
+
+        function _resetCheckButton() {
+            const checkBtn = document.getElementById('check-btn');
+            checkBtn.innerText = 'Antworten prüfen';
+            checkBtn.className = 'w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed text-lg';
+            gameState.actionMode = 'check';
+        }
+
         function startNewTask() {
             gameState.phase = 1;
             gameState.currentTask = MathGen.generateTask();
             
-            // Update UI
+            _resetCheckButton();
+            
             document.getElementById('task-text').innerText = gameState.currentTask.text;
             document.getElementById('instruction-title').innerText = "Stufe 1: Finde die richtige(n) Gleichung(en)";
             document.getElementById('instruction-title').classList.replace('text-green-600', 'text-blue-600');
             
-            // Progress Bar Reset
             document.getElementById('step-line').style.width = "0%";
             document.getElementById('step2-dot').className = "w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center font-bold transition-colors duration-500";
             
-            gameState.currentOptions = MathGen.generateEqOptions(gameState.currentTask);
+            const config = _getOptionsConfigForCurrentTask();
+            const numWrong = config.total - config.numCorrect;
+            _updateHintText(config.numCorrect, config.total);
+            gameState.currentOptions = MathGen.generateEqOptions(gameState.currentTask, config.numCorrect, numWrong);
             renderOptions(gameState.currentOptions);
         }
 
@@ -441,7 +626,7 @@
         }
 
         function nextPhase() {
-            // Hide feedback
+            // Hide feedback overlay
             const overlay = document.getElementById('feedback-overlay');
             const card = document.getElementById('feedback-card');
             card.classList.remove('scale-100');
@@ -449,34 +634,45 @@
             setTimeout(() => overlay.classList.add('hidden'), 200);
 
             if (gameState.phase === 1.5) {
-                // Moving to phase 2
+                // Move to solution phase
                 gameState.phase = 2;
                 document.getElementById('instruction-title').innerText = "Stufe 2: Finde die richtige(n) Lösung(en)";
                 document.getElementById('instruction-title').classList.replace('text-blue-600', 'text-green-600');
                 
-                // Progress Bar Update
                 document.getElementById('step-line').style.width = "100%";
                 document.getElementById('step2-dot').className = "w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold transition-colors duration-500";
                 
-                gameState.currentOptions = MathGen.generateSolOptions(gameState.currentTask);
+                _resetCheckButton();
+                
+                const config = _getOptionsConfigForCurrentTask();
+                const numWrong = config.total - config.numCorrect;
+                _updateHintText(config.numCorrect, config.total);
+                gameState.currentOptions = MathGen.generateSolOptions(gameState.currentTask, config.numCorrect, numWrong);
                 renderOptions(gameState.currentOptions);
             } else {
-                // Was a failure or full success, start new task
                 startNewTask();
             }
         }
 
+        // Unified handler for the action button (check OR continue after wrong answer)
+        function handleActionBtn() {
+            if (gameState.actionMode === 'continue') {
+                startNewTask();
+            } else {
+                checkAnswers();
+            }
+        }
+
         function checkAnswers() {
-            // Check if selected matches exact correct answers
             let correctIndices = [];
             gameState.currentOptions.forEach((opt, idx) => {
                 if (opt.isCorrect) correctIndices.push(idx);
             });
 
-            // Sort both arrays to compare
-            let sortedSelected = [...gameState.selectedIndices].sort();
+            let sortedSelected = [...gameState.selectedIndices].sort((a, b) => a - b);
+            // correctIndices is already in ascending order (built via forEach over array indices)
             let isPerfectMatch = (sortedSelected.length === correctIndices.length) && 
-                                 sortedSelected.every((val, index) => val === correctIndices[index]);
+                                  sortedSelected.every((val, i) => val === correctIndices[i]);
 
             const gameCard = document.getElementById('game-card');
 
@@ -486,42 +682,115 @@
                 setTimeout(() => gameCard.classList.remove('shake-animation'), 500);
                 
                 gameState.streak = 0;
+                gameState.recentAnswers.push(false);
+                if (gameState.recentAnswers.length > 10) gameState.recentAnswers.shift();
+                saveState();
                 updateHUD();
-                
-                let randomMsg = motivationMessages[Math.floor(Math.random() * motivationMessages.length)];
-                
-                // Identify what went wrong for specific feedback (optional, but good UX)
-                let missed = correctIndices.length - sortedSelected.filter(x => correctIndices.includes(x)).length;
-                let wrongSelected = sortedSelected.filter(x => !correctIndices.includes(x)).length;
-                
-                let detailedMsg = randomMsg;
-                if (wrongSelected > 0) detailedMsg = "Du hast eine falsche Antwort markiert. " + randomMsg;
-                else if (missed > 0) detailedMsg = `Du hast nicht alle richtigen Antworten gefunden (es fehlte ${missed}). ` + randomMsg;
 
-                gameState.phase = 0; // Trigger reset on next
-                showFeedback(false, "Schade!", detailedMsg, "Neue Aufgabe");
+                // Highlight answers in-place so the user can review them
+                highlightOptions(correctIndices, gameState.selectedIndices);
+
+                // Switch action button to "Verstanden! Weiter 💪"
+                gameState.actionMode = 'continue';
+                gameState.phase = 0;
+                const checkBtn = document.getElementById('check-btn');
+                checkBtn.disabled = false;
+                checkBtn.innerText = 'Verstanden! Weiter 💪';
+                checkBtn.className = 'w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-xl shadow-lg transition-all transform hover:scale-[1.02] text-lg';
+
             } else {
                 // --- SUCCESS ---
+                gameState.recentAnswers.push(true);
+                if (gameState.recentAnswers.length > 10) gameState.recentAnswers.shift();
+
                 if (gameState.phase === 1) {
-                    gameState.phase = 1.5; // Intermediate state
+                    gameState.phase = 1.5;
+                    saveState();
                     showFeedback(true, "Klasse!", "Die Gleichung(en) stimmt. Jetzt lösen wir sie auf!", "Zur Lösung");
                 } else if (gameState.phase === 2) {
-                    // Full Win!
+                    const oldScore = gameState.score;
                     gameState.score += 10;
                     gameState.streak += 1;
-                    
-                    // Extra points for streaks
                     if (gameState.streak >= 3) gameState.score += 5;
-                    
+
+                    const oldLevel = getCurrentLevel(oldScore);
+                    const newLevel = getCurrentLevel(gameState.score);
+                    const leveledUp = newLevel.pts > oldLevel.pts;
+
                     updateHUD();
-                    gameState.phase = 0; // Reset for next
-                    showFeedback(true, "Perfekt gelöst!", `Du erhältst 10 Punkte!${gameState.streak >= 3 ? ' +5 Combo-Bonus!' : ''}`, "Nächste Aufgabe");
+                    saveState();
+                    gameState.phase = 0;
+
+                    if (leveledUp) {
+                        showLevelUpCeremony(newLevel);
+                    } else {
+                        showFeedback(true, "Perfekt gelöst!", `Du erhältst 10 Punkte!${gameState.streak >= 3 ? ' +5 Combo-Bonus!' : ''}`, "Nächste Aufgabe");
+                    }
                 }
             }
         }
 
+        // --- 4. LEVEL-UP CEREMONY ---
+
+        function showLevelUpCeremony(level) {
+            const overlay = document.getElementById('levelup-overlay');
+            const card = document.getElementById('levelup-card');
+            document.getElementById('levelup-icon').innerText = level.icon;
+            document.getElementById('levelup-name').innerText = level.name;
+            document.getElementById('levelup-msg').innerText = level.msg;
+            overlay.classList.remove('hidden');
+            setTimeout(() => {
+                card.classList.remove('scale-50');
+                card.classList.add('scale-100');
+            }, 10);
+            launchConfetti();
+        }
+
+        function closeLevelUp() {
+            const overlay = document.getElementById('levelup-overlay');
+            const card = document.getElementById('levelup-card');
+            card.classList.remove('scale-100');
+            card.classList.add('scale-50');
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                startNewTask();
+            }, 400);
+        }
+
+        // --- 5. CONFETTI ANIMATION ---
+
+        function launchConfetti() {
+            const colors = ['#f59e0b', '#ef4444', '#3b82f6', '#22c55e', '#a855f7', '#ec4899', '#06b6d4', '#fde68a'];
+            const count = 90;
+            const maxDuration = 4700; // slightly beyond the longest possible fall (2.5+2=4.5s → +200ms buffer)
+            const pieces = [];
+
+            for (let i = 0; i < count; i++) {
+                setTimeout(() => {
+                    const el = document.createElement('div');
+                    el.className = 'confetti';
+                    el.style.left = (Math.random() * 100) + 'vw';
+                    el.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                    const size = (Math.random() * 10 + 5) + 'px';
+                    el.style.width = size;
+                    el.style.height = size;
+                    el.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+                    const duration = (Math.random() * 2.5 + 2).toFixed(2) + 's';
+                    el.style.animation = `confettiFall ${duration} ease-in forwards`;
+                    document.body.appendChild(el);
+                    pieces.push(el);
+                }, i * 25);
+            }
+
+            // Batch-remove all pieces after the longest possible animation completes
+            setTimeout(() => {
+                pieces.forEach(el => el.remove());
+            }, count * 25 + maxDuration);
+        }
+
         // Init
         document.addEventListener('DOMContentLoaded', () => {
+            loadState();
             updateHUD();
             startNewTask();
         });
