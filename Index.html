@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MathQuest V1.1.0: Ungleichungen knacken</title>
+    <title>MathQuest V4.1.1: Ungleichungen knacken</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap');
@@ -392,21 +392,39 @@
                     correctOptions.push({ text: this.formatEqCommutative(task.a, task.b, task.operator, task.c, task.d), isCorrect: true });
                 }
 
+                const correctTexts = new Set(correctOptions.map(o => o.text));
+                const usedTexts = new Set(correctTexts);
+
+                const addWrong = (text) => {
+                    if (!usedTexts.has(text)) {
+                        usedTexts.add(text);
+                        wrongOptions.push({ text, isCorrect: false });
+                    }
+                };
+
                 // Distractors
                 let wrongOp = task.operator === "<" ? ">" : "<";
-                wrongOptions.push({ text: this.formatEq(task.a, task.b, wrongOp, task.c, task.d), isCorrect: false });
-                wrongOptions.push({ text: this.formatEq(task.c, task.d, task.operator, task.a, task.b), isCorrect: false });
-                wrongOptions.push({ text: this.formatEq(task.a, task.b + 5, task.operator, task.c, task.d - 2), isCorrect: false });
+                addWrong(this.formatEq(task.a, task.b, wrongOp, task.c, task.d));
+                addWrong(this.formatEq(task.c, task.d, task.operator, task.a, task.b));
+                addWrong(this.formatEq(task.a, task.b + 5, task.operator, task.c, task.d - 2));
 
-                while (wrongOptions.length < numWrong) {
+                let attempts = 0;
+                while (wrongOptions.length < numWrong && attempts < 50) {
                     let randomB = task.b + (Math.floor(Math.random() * 5) + 1) * (Math.random() < 0.5 ? 1 : -1);
-                    wrongOptions.push({ text: this.formatEq(task.a, randomB, task.operator, task.c, task.d), isCorrect: false });
+                    addWrong(this.formatEq(task.a, randomB, task.operator, task.c, task.d));
+                    attempts++;
                 }
 
                 wrongOptions = wrongOptions.sort(() => Math.random() - 0.5).slice(0, numWrong);
 
-                const allOptions = [...correctOptions, ...wrongOptions];
-                return allOptions.sort(() => Math.random() - 0.5);
+                // Final safety-net: deduplicate allOptions by text, preferring isCorrect: true
+                const seen = new Map();
+                for (const opt of [...correctOptions, ...wrongOptions]) {
+                    if (!seen.has(opt.text) || opt.isCorrect) {
+                        seen.set(opt.text, opt);
+                    }
+                }
+                return [...seen.values()].sort(() => Math.random() - 0.5);
             },
 
             generateSolOptions: function(task, numCorrect, numWrong) {
@@ -422,21 +440,41 @@
                     correctOptions.push({ text: `${task.x_limit} ${flippedOp} x`, isCorrect: true });
                 }
 
+                const correctTexts = new Set(correctOptions.map(o => o.text));
+                const usedTexts = new Set(correctTexts);
+
+                const addWrong = (text) => {
+                    if (!usedTexts.has(text)) {
+                        usedTexts.add(text);
+                        wrongOptions.push({ text, isCorrect: false });
+                    }
+                };
+
                 // Distractors
                 let wrongOp = task.solution_operator === "<" ? ">" : "<";
-                wrongOptions.push({ text: `x ${wrongOp} ${task.x_limit}`, isCorrect: false });
-                wrongOptions.push({ text: `x = ${task.x_limit}`, isCorrect: false });
-                wrongOptions.push({ text: `x ${task.solution_operator} ${task.x_limit * -1}`, isCorrect: false });
+                addWrong(`x ${wrongOp} ${task.x_limit}`);
+                addWrong(`x = ${task.x_limit}`);
+                // String(-0) normalises to "0", avoiding the x_limit=0 duplicate bug
+                addWrong(`x ${task.solution_operator} ${String(-task.x_limit)}`);
 
-                while (wrongOptions.length < numWrong) {
-                    let offLimit = task.x_limit + (Math.floor(Math.random() * 3) + 1);
-                    wrongOptions.push({ text: `x ${task.solution_operator} ${offLimit}`, isCorrect: false });
+                let attempts = 0;
+                while (wrongOptions.length < numWrong && attempts < 50) {
+                    let offset = (Math.floor(Math.random() * 5) + 1) * (Math.random() < 0.5 ? 1 : -1);
+                    let offLimit = task.x_limit + offset;
+                    addWrong(`x ${task.solution_operator} ${offLimit}`);
+                    attempts++;
                 }
 
                 wrongOptions = wrongOptions.sort(() => Math.random() - 0.5).slice(0, numWrong);
 
-                const allOptions = [...correctOptions, ...wrongOptions];
-                return allOptions.sort(() => Math.random() - 0.5);
+                // Final safety-net: deduplicate allOptions by text, preferring isCorrect: true
+                const seen = new Map();
+                for (const opt of [...correctOptions, ...wrongOptions]) {
+                    if (!seen.has(opt.text) || opt.isCorrect) {
+                        seen.set(opt.text, opt);
+                    }
+                }
+                return [...seen.values()].sort(() => Math.random() - 0.5);
             }
         };
 
@@ -453,7 +491,7 @@
             actionMode: 'check' // 'check' | 'continue'
         };
 
-        const STORAGE_KEY = 'mathquest_v1_1_0';
+        const STORAGE_KEY = 'mathquest_v4_1_1';
 
         function saveState() {
             try {
